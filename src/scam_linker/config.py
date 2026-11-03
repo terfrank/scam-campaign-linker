@@ -1,11 +1,13 @@
 """Runtime settings loaded from environment variables (or a local .env file).
 
-Scoring weights and thresholds will live separately in scoring.toml (Phase 5);
-this module only holds deployment settings such as the database URL.
+Linker weights and thresholds live separately in scoring.toml; this module holds
+deployment settings such as the database URL and API limits.
 """
 
 from functools import lru_cache
+from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +19,11 @@ class Settings(BaseSettings):
     app_name: str = "Scam Campaign Linker"
     database_url: str = "postgresql+psycopg://scam:change-me@localhost:5432/scam_linker"
     log_level: str = "INFO"
+
+    # Requests per minute, per client IP, to the endpoints that trigger collection.
+    collect_rate_limit_per_minute: int = Field(default=10, ge=1)
+    # A different scoring.toml (default: the copy shipped inside the package).
+    scoring_config_path: Path | None = None
 
 
 @lru_cache

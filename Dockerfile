@@ -19,4 +19,4 @@ USER appuser
 EXPOSE 8000
 # Bring the schema up to date, then start the API. `exec` makes uvicorn PID 1, so it receives
 # Docker's stop signal directly and shuts down cleanly.
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn scam_linker.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn --factory scam_linker.main:create_app --host 0.0.0.0 --port 8000"]

@@ -5,7 +5,7 @@ A defensive security tool. Give it one known scam or phishing URL (the "seed") a
 infrastructure into **campaigns**, explains *why* each site was linked, and gives a confidence
 score. When the evidence is weak or conflicting, it answers **UNKNOWN** instead of guessing.
 
-> **Status:** Phase 5 of 8: skeleton, safe fetcher, signal collectors, storage and linker.
+> **Status:** Phase 6 of 8: collectors, storage, linker and the HTTP API.
 
 ## Quick start
 
@@ -15,7 +15,8 @@ score. When the evidence is weak or conflicting, it answers **UNKNOWN** instead 
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-uvicorn scam_linker.main:app --reload
+alembic upgrade head            # needs DATABASE_URL, see .env.example
+uvicorn --factory scam_linker.main:create_app --reload
 ```
 
 Then open <http://127.0.0.1:8000/health> or the interactive docs at <http://127.0.0.1:8000/docs>.
@@ -75,6 +76,31 @@ Campaign confidence is the mean of the members' strongest link strengths. Every 
 the exact evidence behind it, so the explanation is generated from stored facts:
 *"3 sites share favicon 495416780, kit path /secure/verify.php and tracking ID G-EXMPL12345;
 registered 2026-11-02 to 2026-11-04"*.
+
+## API
+
+Interactive docs at `/docs`. Collection endpoints are rate-limited per client IP
+(`COLLECT_RATE_LIMIT_PER_MINUTE`, default 10) and answer `429` with `Retry-After` when exceeded.
+
+| Method | Path | What it does |
+|---|---|---|
+| `POST` | `/sites` `{"url": ...}` | Collect every signal for one URL now and store it |
+| `POST` | `/sites/bulk` `{"urls": [...]}` | Queue up to 1000 URLs (deduplicated); collected one at a time in the background, returns `202` |
+| `POST` | `/campaigns/from-seed` `{"url": ...}` | Collect the seed if new, rebuild campaigns, return the seed's campaign, or `status: "unknown"` |
+| `GET` | `/campaigns/{id}` | A stored campaign with its members and evidence |
+| `GET` | `/health` | `200` if the API and database are up, `503` if the database is not |
+
+`/campaigns/from-seed` returns the members with their link strength and shared evidence, a
+plain-English `summary`, and `possibly_related_unknown`: sites with some shared evidence that
+isn't enough to link. When nothing links, `status` is `"unknown"` and the summary says why
+(for example, that the seed page could not be fetched) instead of guessing.
+
+Trade-offs, on purpose:
+- **Bulk jobs use FastAPI `BackgroundTasks`** in the API process: no queue to run, but queued
+  work is lost if the API restarts. Re-submitting is safe, because saving a site is an upsert.
+- **Campaigns are snapshots.** Each `from-seed` call recomputes them, so campaign ids change
+  between calls.
+- **The rate limiter is in memory**, which is correct for one API container but not for several.
 
 ## Data model
 

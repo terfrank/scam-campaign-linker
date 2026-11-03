@@ -6,6 +6,7 @@ and time by a fake clock, so nothing here sleeps or resolves real names.
 """
 
 import socket
+import threading
 from collections.abc import Iterator
 
 import httpx
@@ -385,3 +386,17 @@ def test_json_kind_accepts_api_responses_without_checking_robots(
 
     assert result.status is FetchStatus.OK
     assert router["robots"].call_count == 0
+
+
+def test_rate_limiter_reserves_distinct_slots_across_threads() -> None:
+    """Concurrent callers for one host must queue up 1 s apart, never fire together."""
+    sleeps: list[float] = []
+    limiter = RateLimiter(1.0, clock=lambda: 0.0, sleep=sleeps.append)
+
+    threads = [threading.Thread(target=limiter.wait, args=("a.example",)) for _ in range(3)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert sorted(sleeps) == [1.0, 2.0]  # slots at 0 s, 1 s and 2 s

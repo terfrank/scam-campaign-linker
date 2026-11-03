@@ -20,6 +20,7 @@ so a caller can log and skip a failure without crashing the run.
 import ipaddress
 import logging
 import socket
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -149,7 +150,11 @@ def build_client() -> httpx.Client:
 
 
 class RateLimiter:
-    """Keeps at least `min_interval` seconds between two requests to the same host."""
+    """Keeps at least `min_interval` seconds between two requests to the same host.
+
+    Thread-safe: the API serves requests on a thread pool. Each caller reserves its time
+    slot under a lock, then sleeps outside it, so waiting for one host never blocks others.
+    """
 
     def __init__(
         self,
@@ -160,18 +165,17 @@ class RateLimiter:
         self._min_interval = min_interval
         self._clock = clock
         self._sleep = sleep
-        self._last_request: dict[str, float] = {}
+        self._next_allowed: dict[str, float] = {}
+        self._lock = threading.Lock()
 
     def wait(self, host: str) -> None:
-        """Block until a request to `host` is allowed, then record it."""
-        now = self._clock()
-        last = self._last_request.get(host)
-        if last is not None:
-            delay = last + self._min_interval - now
-            if delay > 0:
-                self._sleep(delay)
-                now += delay
-        self._last_request[host] = now
+        """Block until a request to `host` is allowed."""
+        with self._lock:
+            now = self._clock()
+            slot = max(now, self._next_allowed.get(host, now))
+            self._next_allowed[host] = slot + self._min_interval
+        if slot > now:
+            self._sleep(slot - now)
 
 
 class SafeFetcher:

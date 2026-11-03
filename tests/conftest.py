@@ -10,18 +10,12 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from fakes import PUBLIC_IP, FakeClock, FakeDnsResolver
+from scam_linker.config import Settings
 from scam_linker.db.models import Base
 from scam_linker.db.session import make_engine, make_session_factory
 from scam_linker.dns_client import DnsClient
 from scam_linker.fetcher import RateLimiter, SafeFetcher
 from scam_linker.main import create_app
-
-
-@pytest.fixture
-def client() -> Iterator[TestClient]:
-    """An in-process HTTP client for the API. No network, no real server."""
-    with TestClient(create_app()) as test_client:
-        yield test_client
 
 
 @pytest.fixture
@@ -83,3 +77,11 @@ def engine() -> Iterator[Engine]:
 def db_session(engine: Engine) -> Iterator[Session]:
     with make_session_factory(engine)() as session:
         yield session
+
+
+@pytest.fixture
+def client(engine: Engine, fetcher: SafeFetcher, dns_client: DnsClient) -> Iterator[TestClient]:
+    """The real app over HTTP, wired to a test database, fake DNS and respx-mocked HTTP."""
+    app = create_app(Settings(_env_file=None), engine=engine, fetcher=fetcher, dns=dns_client)
+    with TestClient(app) as test_client:
+        yield test_client

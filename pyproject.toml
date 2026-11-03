@@ -62,6 +62,11 @@ warn_unused_ignores = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+filterwarnings = [
+    # Starlette 1.x prefers the separate `httpx2` package for its TestClient. We stay on httpx,
+    # which respx is built for, rather than add a dependency we haven't vetted. Test-only.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:starlette.exceptions.StarletteDeprecationWarning",
+]
 
 [tool.alembic]
 script_location = "%(here)s/migrations"

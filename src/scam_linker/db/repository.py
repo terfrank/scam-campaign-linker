@@ -1,20 +1,22 @@
-"""Repository functions: the only code that reads or writes sites and signals.
+"""Repository functions: the only code that reads or writes the database.
 
 Functions take a Session and `flush()` but never `commit()`. The caller (an API request,
 a script) owns the transaction, so several repository calls can succeed or fail together.
 """
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import datetime
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
-from sqlalchemy import select, tuple_
-from sqlalchemy.orm import Session
+from sqlalchemy import delete, select, tuple_
+from sqlalchemy.orm import Session, selectinload
 
 from scam_linker.collectors.base import Signal, SignalType
 from scam_linker.collectors.runner import SiteCollection
 from scam_linker.db import models
+from scam_linker.linker.grouping import CampaignGroup
 
 logger = logging.getLogger(__name__)
 
@@ -126,3 +128,53 @@ def site_signal_index(session: Session) -> dict[int, set[Signal]]:
     for site_id, type_, value in rows:
         index.setdefault(site_id, set()).add(Signal(SignalType(type_), value))
     return index
+
+
+def get_sites(session: Session, site_ids: Iterable[int]) -> dict[int, models.Site]:
+    """Load several sites in one query, keyed by id."""
+    ids = set(site_ids)
+    if not ids:
+        return {}
+    return {
+        site.id: site
+        for site in session.scalars(select(models.Site).where(models.Site.id.in_(ids)))
+    }
+
+
+def replace_campaigns(
+    session: Session, campaigns: Sequence[tuple[CampaignGroup, dict[str, Any]]]
+) -> list[models.Campaign]:
+    """Replace every stored campaign with a freshly computed set (group + explanation JSON).
+
+    Campaigns are a snapshot of the linker's latest run. Because the caller commits once,
+    other readers see either the old set or the new set, never a half-written mix.
+    Returns the new rows in the same order as `campaigns`.
+    """
+    session.execute(delete(models.Campaign))  # members go too: ON DELETE CASCADE
+    rows = []
+    for group, explanation in campaigns:
+        row = models.Campaign(
+            confidence=group.confidence,
+            explanation=explanation,
+            members=[
+                models.CampaignMember(
+                    site_id=member.site_id,
+                    link_strength=member.link_strength,
+                    shared_signals=[item.label for item in member.shared],
+                )
+                for member in group.members
+            ],
+        )
+        session.add(row)
+        rows.append(row)
+    session.flush()
+    return rows
+
+
+def get_campaign(session: Session, campaign_id: int) -> models.Campaign | None:
+    """A campaign with its members and their sites loaded (2 extra queries, not one per member)."""
+    return session.scalar(
+        select(models.Campaign)
+        .where(models.Campaign.id == campaign_id)
+        .options(selectinload(models.Campaign.members).selectinload(models.CampaignMember.site))
+    )
