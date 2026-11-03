@@ -6,6 +6,7 @@ from typing import Any
 
 import dns.rdata
 import dns.resolver
+import respx
 
 from scam_linker.collectors.base import SiteContext
 from scam_linker.dns_client import DnsClient
@@ -85,3 +86,7 @@ class FakeDnsResolver:
         if rdtype not in records:
             raise dns.resolver.NoAnswer
         return [dns.rdata.from_text("IN", rdtype, text) for text in records[rdtype]]
+
+
+def serve(router: respx.MockRouter, url: str, fixture: str) -> None:
+    router.get(url).respond(200, html=fixture_text(f"html/{fixture}"))

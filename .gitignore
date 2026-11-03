@@ -20,3 +20,6 @@ htmlcov/
 .env
 *.db
 data/
+
+# Evaluation outputs (real feed URLs and results; regenerate with scripts/evaluate.py)
+evaluation/

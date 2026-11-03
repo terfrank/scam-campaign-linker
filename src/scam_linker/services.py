@@ -5,7 +5,7 @@ Each function that changes data commits its own transaction.
 """
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -38,22 +38,31 @@ class BulkOutcome:
     failed: int
 
 
+# Called after each URL with (position, url, outcome): a fetch status, or "failed".
+Progress = Callable[[int, str, str], None]
+
+
 def collect_many(
     urls: Iterable[str],
     session_factory: sessionmaker[Session],
     fetcher: SafeFetcher,
     dns: DnsClient,
+    progress: Progress | None = None,
 ) -> BulkOutcome:
     """Collect URLs one at a time, each in its own transaction. One failure never stops the rest."""
     saved = failed = 0
-    for url in urls:
+    for position, url in enumerate(urls, start=1):
         try:
             with session_factory() as session:
-                collect_and_save(session, url, fetcher, dns)
+                site = collect_and_save(session, url, fetcher, dns)
+                outcome = site.fetch_status or "unknown"
             saved += 1
         except Exception:
             logger.exception("bulk collection failed for %s", url)
+            outcome = "failed"
             failed += 1
+        if progress is not None:
+            progress(position, url, outcome)
     logger.info("bulk collection finished: %d saved, %d failed", saved, failed)
     return BulkOutcome(saved, failed)
 

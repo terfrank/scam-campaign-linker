@@ -5,7 +5,7 @@ A defensive security tool. Give it one known scam or phishing URL (the "seed") a
 infrastructure into **campaigns**, explains *why* each site was linked, and gives a confidence
 score. When the evidence is weak or conflicting, it answers **UNKNOWN** instead of guessing.
 
-> **Status:** Phase 7 of 8: collectors, storage, linker, HTTP API and campaign graph page.
+> **Status:** Phase 8 of 8: evaluation tooling done; results pending a real run.
 
 ## Quick start
 
@@ -130,6 +130,57 @@ python scripts/demo_data.py          # six fictional sites, signals written dire
 uvicorn --factory scam_linker.main:create_app
 # open http://127.0.0.1:8000/?seed=https://examplebank-secure-a.xyz/
 ```
+
+## Evaluating on a real feed
+
+`scripts/evaluate.py` runs the full pipeline on a sample of a public feed, using its own
+SQLite database, and writes everything to `evaluation/` (git-ignored). Every URL in its
+output is defanged.
+
+```bash
+# Collect and link a reproducible sample. --live is required: this contacts the listed sites
+# (passively: DNS, RDAP, crt.sh, raw HTML and favicon only, rate-limited, robots.txt respected).
+python scripts/evaluate.py run feed.txt --live --limit 100 --random-seed 42
+
+# Re-link without any network, e.g. after editing scoring.toml
+python scripts/evaluate.py run --relink-only
+
+# Fill in same_campaign (yes / no / unsure) in evaluation/pairs.csv, then:
+python scripts/evaluate.py score evaluation/pairs.csv
+```
+
+- `report.md` has the counts: fetch outcomes, signal coverage, collector failures, campaigns and
+  UNKNOWN sites.
+- `pairs.csv` has one row per decision (`linked` or `possibly_related`) with its evidence, ready
+  to check by hand.
+- `score` turns your verdicts into the share of linked pairs you judged correct (precision).
+  **Recall can't be measured this way**, because no ground truth exists for pairs the linker
+  never proposed.
+
+## Results and limitations
+
+### Results
+
+_Not yet measured. This section will be filled in from a real run of `scripts/evaluate.py`
+(sample size, date, fetch outcomes, campaigns found, and precision from hand-checked pairs).
+No numbers are reported until then._
+
+### Known limitations (by design)
+
+- **Precision only, from hand-checking.** The linker is judged on the pairs it proposed, by
+  one person, so recall is unknown and verdicts are subjective.
+- **Feeds are biased samples.** Public feeds over-represent whatever their sources detect best,
+  and many listed sites are already offline when collected.
+- **Dead sites lose HTML signals.** A site that's down still has DNS, RDAP and certificate
+  data, but no favicon, fingerprint, title, kit path or tracking ID.
+- **Shared infrastructure is noisy.** Large hosts, CDNs and sinkholes are why IP and ASN are
+  weak-only, and why `max_sites_per_signal` exists. Its default (100) is a guess to tune.
+- **Linking is transitive.** If A–B and B–C are linked, A and C end up in one campaign even if
+  they share nothing directly. Each member's `shared` list shows exactly why it is there.
+- **"Conflicting" evidence is only partly modelled.** UNKNOWN means not enough evidence (or only
+  noisy evidence); there is no rule yet that detects contradictions between signals.
+- **Point-in-time snapshots.** Re-collecting replaces a site's signals, and campaigns are
+  recomputed on demand, so results reflect when the data was collected.
 
 ## Data model
 

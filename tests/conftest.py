@@ -3,13 +3,14 @@
 import os
 from collections.abc import Iterator
 
+import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from fakes import PUBLIC_IP, FakeClock, FakeDnsResolver
+from fakes import FIXTURES, PUBLIC_IP, FakeClock, FakeDnsResolver, fixture_bytes
 from scam_linker.config import Settings
 from scam_linker.db.models import Base
 from scam_linker.db.session import make_engine, make_session_factory
@@ -85,3 +86,31 @@ def client(engine: Engine, fetcher: SafeFetcher, dns_client: DnsClient) -> Itera
     app = create_app(Settings(_env_file=None), engine=engine, fetcher=fetcher, dns=dns_client)
     with TestClient(app) as test_client:
         yield test_client
+
+
+def _from_fixture(folder: str, name: str, content_type: str) -> httpx.Response:
+    path = FIXTURES / folder / f"{name}.json"
+    if not path.exists():
+        return httpx.Response(404)
+    return httpx.Response(200, headers={"content-type": content_type}, content=path.read_bytes())
+
+
+@pytest.fixture
+def api_router(router: respx.MockRouter) -> respx.MockRouter:
+    router.get("https://cdn.harmless-blog.org/icon.png").respond(
+        200, headers={"content-type": "image/png"}, content=b"\x89PNG blog icon"
+    )
+    router.get(path__regex=r"\.ico$").respond(
+        200, headers={"content-type": "image/x-icon"}, content=fixture_bytes("favicons/kit.ico")
+    )
+    router.get(host="rdap.org").mock(
+        side_effect=lambda request: _from_fixture(
+            "rdap", request.url.path.rsplit("/", 1)[-1], "application/rdap+json"
+        )
+    )
+    router.get(host="crt.sh").mock(
+        side_effect=lambda request: _from_fixture(
+            "crtsh", request.url.params["q"], "application/json"
+        )
+    )
+    return router
