@@ -5,7 +5,7 @@ A defensive security tool. Give it one known scam or phishing URL (the "seed") a
 infrastructure into **campaigns**, explains *why* each site was linked, and gives a confidence
 score. When the evidence is weak or conflicting, it answers **UNKNOWN** instead of guessing.
 
-> **Status:** Phase 4 of 8: skeleton, safe fetcher, signal collectors and storage.
+> **Status:** Phase 5 of 8: skeleton, safe fetcher, signal collectors, storage and linker.
 
 ## Quick start
 
@@ -46,6 +46,35 @@ alembic upgrade head                                  # create or update the sch
 alembic revision --autogenerate -m "describe change"  # after editing db/models.py; review the file!
 alembic check                                         # fails if models and migrations disagree
 ```
+
+## How sites are linked
+
+Every weight and threshold lives in [`src/scam_linker/scoring.toml`](src/scam_linker/scoring.toml),
+which is validated when it loads. A typo, a weight outside (0, 1], or an evidence kind missing
+from the tiers is an error, not a silent change.
+
+| Tier | Evidence (each kind counts once per pair) | Weight |
+|---|---|---|
+| Strong | same favicon, page structure, tracking ID, shared certificate, or a *rare* kit path (≤ 3 sites) | 0.9 |
+| Medium | identical nameservers **and** registered ≤ 7 days apart; same registrar **and** same title | 0.5 |
+| Weak | same IP; same ASN | 0.1 |
+
+1. **Score pairs.** An inverted index (evidence → sites) finds the pairs that share anything.
+   A pair's strength is the sum of its evidence weights, capped at 1.0.
+2. **Link.** A pair is linked when its strength is at least `link_threshold` (0.8) **and** it has
+   strong or medium evidence. One strong signal, or two medium ones, is enough.
+3. **Group.** Campaigns are connected components (union-find) over linked pairs only.
+4. **Never guess.** A pair with evidence that isn't enough to link, such as a shared ASN, is
+   reported as *possibly related (UNKNOWN)* and never merges campaigns. A site with no links
+   has no campaign. This holds even if the threshold is lowered, and a test checks it.
+5. **Filter noise.** A value shared by more than `max_sites_per_signal` sites (e.g. a hosting
+   provider's default favicon) is treated as infrastructure and ignored, as is anything in the
+   `[ignore]` list.
+
+Campaign confidence is the mean of the members' strongest link strengths. Every link keeps
+the exact evidence behind it, so the explanation is generated from stored facts:
+*"3 sites share favicon 495416780, kit path /secure/verify.php and tracking ID G-EXMPL12345;
+registered 2026-11-02 to 2026-11-04"*.
 
 ## Data model
 

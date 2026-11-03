@@ -1,0 +1,40 @@
+# Every weight and threshold the linker uses. Change values here; no code changes needed.
+# The file is validated on load: unknown keys, weights outside (0, 1] or an evidence kind
+# missing from (or listed twice across) the three tiers are rejected with a clear error.
+
+# Two sites are linked when the sum of their evidence weights (capped at 1.0) reaches this,
+# AND at least one piece of evidence is strong or medium. Weak evidence can never link alone,
+# however low this threshold is set.
+link_threshold = 0.8
+
+# "Same nameservers" only counts if both domains were registered within this many days.
+registration_window_days = 7
+
+# A shared kit path is only evidence if at most this many sites use it ("rare").
+rare_kit_path_max_sites = 3
+
+# A signal value seen on more sites than this is treated as shared infrastructure
+# (a hosting provider's default favicon, a CDN IP) and never used for linking.
+max_sites_per_signal = 100
+
+# Each evidence kind counts once per pair, however many values two sites share
+# (three shared tracking IDs still add 0.9, not 2.7).
+
+[strong]
+favicon_hash = 0.9
+html_fingerprint = 0.9
+tracking_id = 0.9
+cert = 0.9
+rare_kit_path = 0.9
+
+[medium]
+nameservers_and_registration = 0.5  # identical nameserver set + registered close together
+registrar_and_title = 0.5           # same registrar + same page title
+
+[weak]
+ip = 0.1   # big shared hosts put thousands of unrelated sites on one IP
+asn = 0.1  # an ASN is a whole network, often a large cloud provider
+
+# Signal values never used for linking, by signal type. Add known-benign shared values here.
+[ignore]
+# favicon_hash = ["-1234567"]
