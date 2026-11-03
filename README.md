@@ -5,7 +5,7 @@ A defensive security tool. Give it one known scam or phishing URL (the "seed") a
 infrastructure into **campaigns**, explains *why* each site was linked, and gives a confidence
 score. When the evidence is weak or conflicting, it answers **UNKNOWN** instead of guessing.
 
-> **Status:** Phase 1 of 8: project skeleton and `/health` endpoint.
+> **Status:** Phase 2 of 8: project skeleton, `/health` endpoint and the safe fetcher.
 
 ## Quick start
 
@@ -43,6 +43,27 @@ src/scam_linker/   application package (API, config; fetcher/collectors/linker i
 tests/             pytest suite; tests only ever use saved fixture files, never live sites
 .github/workflows/ CI: ruff, mypy, pytest and a Docker build on every push
 ```
+
+## How fetching stays safe
+
+All HTTP requests to scanned sites go through one module, `src/scam_linker/fetcher.py`, and
+`tests/test_fetcher.py` has a test for each rule:
+
+| Rule | How it is enforced |
+|---|---|
+| 5 s timeout | httpx per-operation timeout, plus a total deadline per download (stops slow-drip servers) |
+| 2 MB cap | `Content-Length` is checked first, then the body is streamed and cut off at 2 MB |
+| Max 3 redirects | Redirects are followed by hand, so every hop is re-checked |
+| No cookies | Cookie jar with a policy that rejects every cookie |
+| No JavaScript / forms | Only `GET` of the page itself; the body is returned as raw bytes, never parsed for sub-resources |
+| HTML and favicons only | Content-type allow-list per resource kind |
+| No internal targets (SSRF) | Hosts resolving to private, loopback or link-local IPs are refused, including on redirects |
+| robots.txt | Fetched once per origin; RFC 9309 rules (4xx = no rules, 5xx/unreachable = disallow all) |
+| Rate limit | At least 1 s between requests to the same host |
+
+Known limitation: the address check resolves DNS before httpx resolves it again, so a
+DNS-rebinding attacker could in theory change the answer in between. Closing that gap would mean
+connecting to the pinned IP directly, which is out of scope for this project.
 
 ## Responsible use
 
