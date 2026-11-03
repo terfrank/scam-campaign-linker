@@ -9,12 +9,15 @@ description = "Passive, defensive tool that links scam/phishing sites into campa
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.16",  # database migrations
     "dnspython>=2.6",
     "fastapi>=0.115",
     "httpx>=0.27",
     "mmh3>=4.1",  # favicon hash, same scheme as Shodan's http.favicon.hash
+    "psycopg[binary]>=3.1",  # PostgreSQL driver
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
+    "sqlalchemy>=2.0",
     "tldextract>=5.3",  # registered domain from a hostname (handles co.uk etc.)
     "uvicorn[standard]>=0.30",
 ]
@@ -50,7 +53,7 @@ known-first-party = ["scam_linker", "fakes"]  # fakes = tests/fakes.py, our shar
 
 [tool.mypy]
 python_version = "3.12"
-files = ["src", "tests"]
+files = ["src", "tests", "migrations"]
 plugins = ["pydantic.mypy"]
 disallow_untyped_defs = true
 check_untyped_defs = true
@@ -59,3 +62,20 @@ warn_unused_ignores = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+
+[tool.alembic]
+script_location = "%(here)s/migrations"
+file_template = "%%(year)d%%(month).2d%%(day).2d_%%(rev)s_%%(slug)s"  # sorts by date in file lists
+
+# Format generated migrations so they pass the same ruff checks as the rest of the code.
+[[tool.alembic.post_write_hooks]]
+name = "ruff_format"
+type = "module"
+module = "ruff"
+options = "format REVISION_SCRIPT_FILENAME"
+
+[[tool.alembic.post_write_hooks]]
+name = "ruff_fix"
+type = "module"
+module = "ruff"
+options = "check --fix REVISION_SCRIPT_FILENAME"

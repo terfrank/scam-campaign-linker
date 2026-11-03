@@ -10,6 +10,26 @@ permissions:
 jobs:
   lint-type-test:
     runs-on: ubuntu-latest
+
+    # A real PostgreSQL for the database tests, so SQLite-only assumptions get caught.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      POSTGRES_URL: postgresql+psycopg://ci:ci@localhost:5432/ci
+
     steps:
       - uses: actions/checkout@v5
 
@@ -31,8 +51,20 @@ jobs:
       - name: Mypy
         run: mypy
 
-      - name: Pytest
+      - name: Pytest (SQLite)
         run: pytest
+
+      - name: Pytest database tests (PostgreSQL)
+        env:
+          TEST_DATABASE_URL: ${{ env.POSTGRES_URL }}
+        run: pytest tests/test_repository.py tests/test_migrations.py
+
+      - name: Migrations via the CLI, as Docker runs them (PostgreSQL)
+        env:
+          DATABASE_URL: ${{ env.POSTGRES_URL }}
+        run: |
+          alembic upgrade head
+          alembic check
 
   docker-build:
     runs-on: ubuntu-latest

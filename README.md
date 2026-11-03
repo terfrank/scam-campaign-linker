@@ -5,7 +5,7 @@ A defensive security tool. Give it one known scam or phishing URL (the "seed") a
 infrastructure into **campaigns**, explains *why* each site was linked, and gives a confidence
 score. When the evidence is weak or conflicting, it answers **UNKNOWN** instead of guessing.
 
-> **Status:** Phase 3 of 8: skeleton, safe fetcher and signal collectors.
+> **Status:** Phase 4 of 8: skeleton, safe fetcher, signal collectors and storage.
 
 ## Quick start
 
@@ -36,12 +36,36 @@ mypy
 pytest
 ```
 
+### Database migrations (Alembic)
+
+The Docker image runs `alembic upgrade head` on start. To work with migrations locally, set
+`DATABASE_URL` (see `.env.example`), then:
+
+```bash
+alembic upgrade head                                  # create or update the schema
+alembic revision --autogenerate -m "describe change"  # after editing db/models.py; review the file!
+alembic check                                         # fails if models and migrations disagree
+```
+
+## Data model
+
+```
+sites ──< site_signals >── signals          campaigns ──< campaign_members >── sites
+```
+
+- `signals` holds each distinct fact once (`UNIQUE(type, value)`), so "which sites share
+  favicon X?" is one indexed join.
+- Re-collecting a site replaces its signals, so infrastructure a site no longer uses can't
+  link it to other sites.
+- `sites.collector_errors` records why a signal is missing, e.g. an RDAP timeout.
+
 ## Project layout
 
 ```
-src/scam_linker/   application package (API, config; fetcher/collectors/linker in later phases)
+src/scam_linker/   application package: fetcher, collectors/, db/ (linker and API in later phases)
+migrations/        Alembic migration scripts
 tests/             pytest suite; tests only ever use saved fixture files, never live sites
-.github/workflows/ CI: ruff, mypy, pytest and a Docker build on every push
+.github/workflows/ CI: ruff, mypy, pytest (SQLite + PostgreSQL) and a Docker build on every push
 ```
 
 ## How fetching stays safe

@@ -1,12 +1,17 @@
 """Shared pytest fixtures."""
 
+import os
 from collections.abc import Iterator
 
 import pytest
 import respx
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine
+from sqlalchemy.orm import Session
 
 from fakes import PUBLIC_IP, FakeClock, FakeDnsResolver
+from scam_linker.db.models import Base
+from scam_linker.db.session import make_engine, make_session_factory
 from scam_linker.dns_client import DnsClient
 from scam_linker.fetcher import RateLimiter, SafeFetcher
 from scam_linker.main import create_app
@@ -58,3 +63,23 @@ def dns_resolver() -> FakeDnsResolver:
 @pytest.fixture
 def dns_client(dns_resolver: FakeDnsResolver, clock: FakeClock) -> DnsClient:
     return DnsClient(resolver=dns_resolver, limiter=RateLimiter(0.2, clock, clock.sleep))
+
+
+@pytest.fixture
+def engine() -> Iterator[Engine]:
+    """A fresh, empty database per test.
+
+    In-memory SQLite by default. CI also sets TEST_DATABASE_URL to a real PostgreSQL service,
+    so the same tests catch differences between the two (JSONB, timezones, constraints).
+    """
+    db_engine = make_engine(os.environ.get("TEST_DATABASE_URL", "sqlite://"))
+    Base.metadata.create_all(db_engine)
+    yield db_engine
+    Base.metadata.drop_all(db_engine)
+    db_engine.dispose()
+
+
+@pytest.fixture
+def db_session(engine: Engine) -> Iterator[Session]:
+    with make_session_factory(engine)() as session:
+        yield session
