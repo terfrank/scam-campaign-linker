@@ -6,10 +6,12 @@ Every safety rule lives here so it can be tested in one place:
 - 5 s timeout per network operation AND for each whole download
 - 2 MB response cap, checked on Content-Length and again while streaming
 - at most 3 redirects, followed by hand so every hop is re-checked
-- only HTML or favicon content types; sub-resources (scripts, images, forms) are never requested,
-  and nothing is ever executed: the body is returned as raw bytes
+- only HTML or favicon content types from scanned sites (plus JSON from the public crt.sh and
+  RDAP APIs); sub-resources (scripts, images, forms) are never requested, and nothing is ever
+  executed: the body is returned as raw bytes
 - refuses hosts that resolve to private/internal addresses (SSRF protection)
-- robots.txt respected (RFC 9309) and a minimum delay between requests to the same host
+- robots.txt respected (RFC 9309) for scanned sites, and a minimum delay between requests to
+  the same host
 
 `fetch()` never raises. Every outcome, including refusals, is a FetchResult with a status,
 so a caller can log and skip a failure without crashing the run.
@@ -45,6 +47,12 @@ class ResourceKind(StrEnum):
     HTML = "html"
     FAVICON = "favicon"
     ROBOTS = "robots"
+    JSON = "json"  # public APIs only (crt.sh, RDAP), never scanned sites
+
+
+# robots.txt governs crawlers visiting a site's pages. It does not apply to fetching robots.txt
+# itself, or to public APIs (crt.sh, RDAP) that are designed for programmatic queries.
+ROBOTS_APPLIES_TO = frozenset({ResourceKind.HTML, ResourceKind.FAVICON})
 
 
 # None means "any content type" (robots.txt is often served with the wrong type).
@@ -63,12 +71,14 @@ ALLOWED_CONTENT_TYPES: dict[ResourceKind, frozenset[str] | None] = {
         }
     ),
     ResourceKind.ROBOTS: None,
+    ResourceKind.JSON: frozenset({"application/json", "application/rdap+json"}),
 }
 
 MAX_BYTES_BY_KIND: dict[ResourceKind, int] = {
     ResourceKind.HTML: MAX_BYTES,
     ResourceKind.FAVICON: MAX_BYTES,
     ResourceKind.ROBOTS: ROBOTS_MAX_BYTES,
+    ResourceKind.JSON: MAX_BYTES,
 }
 
 
@@ -255,7 +265,7 @@ class SafeFetcher:
             if not ipaddress.ip_address(address).is_global:
                 return FetchStatus.BLOCKED_ADDRESS, f"{hostname} resolves to {address}"
 
-        if kind is not ResourceKind.ROBOTS and not self._robots_allows(url):
+        if kind in ROBOTS_APPLIES_TO and not self._robots_allows(url):
             return FetchStatus.BLOCKED_BY_ROBOTS, "disallowed by robots.txt"
         return None
 

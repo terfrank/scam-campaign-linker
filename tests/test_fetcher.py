@@ -12,6 +12,7 @@ import httpx
 import pytest
 import respx
 
+from fakes import PUBLIC_IP, FakeClock
 from scam_linker.fetcher import (
     MAX_BYTES,
     MAX_REDIRECTS,
@@ -24,53 +25,7 @@ from scam_linker.fetcher import (
     build_client,
 )
 
-PUBLIC_IP = "93.184.215.14"
 SITE = "http://scam.example"
-
-
-class FakeClock:
-    """A controllable clock. `step` seconds pass on every read; sleeping advances time."""
-
-    def __init__(self, step: float = 0.0) -> None:
-        self.now = 0.0
-        self.step = step
-        self.sleeps: list[float] = []
-
-    def __call__(self) -> float:
-        self.now += self.step
-        return self.now
-
-    def sleep(self, seconds: float) -> None:
-        self.sleeps.append(seconds)
-        self.now += seconds
-
-
-@pytest.fixture
-def clock() -> FakeClock:
-    return FakeClock()
-
-
-@pytest.fixture
-def addresses() -> dict[str, list[str]]:
-    """Fake DNS: hostname -> IPs. Unknown hosts resolve to a public address."""
-    return {}
-
-
-@pytest.fixture
-def fetcher(clock: FakeClock, addresses: dict[str, list[str]]) -> Iterator[SafeFetcher]:
-    def resolver(host: str) -> list[str]:
-        return addresses.get(host, [PUBLIC_IP])
-
-    with SafeFetcher(resolver=resolver, clock=clock, sleep=clock.sleep) as safe_fetcher:
-        yield safe_fetcher
-
-
-@pytest.fixture
-def router() -> Iterator[respx.MockRouter]:
-    """Mock network. robots.txt is 404 (no rules) unless a test changes router['robots']."""
-    with respx.mock(assert_all_called=False) as mock:
-        mock.get(path="/robots.txt", name="robots").respond(404)
-        yield mock
 
 
 # --- basic behaviour -------------------------------------------------------
@@ -412,3 +367,21 @@ def test_fetcher_rate_limits_every_request(
     fetcher.fetch(f"{SITE}/", ResourceKind.HTML)  # the page again
 
     assert clock.sleeps == [1.0, 1.0]
+
+
+# --- JSON APIs (crt.sh, RDAP) ----------------------------------------------------
+
+
+def test_json_kind_accepts_api_responses_without_checking_robots(
+    fetcher: SafeFetcher, router: respx.MockRouter
+) -> None:
+    """robots.txt governs crawling pages, not public APIs built for programmatic queries."""
+    router["robots"].respond(200, text="User-agent: *\nDisallow: /\n")
+    router.get("https://rdap.example/domain/a.xyz").respond(
+        200, headers={"content-type": "application/rdap+json"}, content=b"{}"
+    )
+
+    result = fetcher.fetch("https://rdap.example/domain/a.xyz", ResourceKind.JSON)
+
+    assert result.status is FetchStatus.OK
+    assert router["robots"].call_count == 0

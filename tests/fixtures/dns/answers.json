@@ -1,0 +1,19 @@
+{
+  "examplebank-secure-a.xyz": {
+    "A": ["45.67.89.10"],
+    "NS": ["ns1.example-host.xyz.", "NS2.Example-Host.xyz."]
+  },
+  "login.examplebank-secure-a.xyz": {
+    "A": ["45.67.89.10"]
+  },
+  "10.89.67.45.origin.asn.cymru.com": {
+    "TXT": ["\"64500 | 45.67.89.0/24 | NL | ripencc | 2019-01-01\""]
+  },
+  "examplebank-secure-b.xyz": {
+    "A": ["45.67.89.11", "45.67.89.10"],
+    "NS": ["ns1.example-host.xyz.", "ns2.example-host.xyz."]
+  },
+  "11.89.67.45.origin.asn.cymru.com": {
+    "TXT": ["\"64500 64501 | 45.67.89.0/24 | NL | ripencc | 2019-01-01\""]
+  }
+}

@@ -5,7 +5,7 @@ A defensive security tool. Give it one known scam or phishing URL (the "seed") a
 infrastructure into **campaigns**, explains *why* each site was linked, and gives a confidence
 score. When the evidence is weak or conflicting, it answers **UNKNOWN** instead of guessing.
 
-> **Status:** Phase 2 of 8: project skeleton, `/health` endpoint and the safe fetcher.
+> **Status:** Phase 3 of 8: skeleton, safe fetcher and signal collectors.
 
 ## Quick start
 
@@ -58,12 +58,32 @@ All HTTP requests to scanned sites go through one module, `src/scam_linker/fetch
 | No JavaScript / forms | Only `GET` of the page itself; the body is returned as raw bytes, never parsed for sub-resources |
 | HTML and favicons only | Content-type allow-list per resource kind |
 | No internal targets (SSRF) | Hosts resolving to private, loopback or link-local IPs are refused, including on redirects |
-| robots.txt | Fetched once per origin; RFC 9309 rules (4xx = no rules, 5xx/unreachable = disallow all) |
+| robots.txt | Fetched once per origin; RFC 9309 rules (4xx = no rules, 5xx/unreachable = disallow all). Not applied to the crt.sh and RDAP APIs, which are built for programmatic queries |
 | Rate limit | At least 1 s between requests to the same host |
 
 Known limitation: the address check resolves DNS before httpx resolves it again, so a
 DNS-rebinding attacker could in theory change the answer in between. Closing that gap would mean
 connecting to the pinned IP directly, which is out of scope for this project.
+
+## Signals collected
+
+Each signal comes from one small collector in `src/scam_linker/collectors/`. The page HTML is
+fetched once and shared. If a collector fails, the failure is logged and recorded, and the
+other collectors still run.
+
+| Signal | Source | Notes |
+|---|---|---|
+| `favicon_hash` | `<link rel="icon">` or `/favicon.ico` | MurmurHash3 in Shodan's format, so values can be searched as `http.favicon.hash` |
+| `html_fingerprint` | Page HTML | SHA-256 of the start-tag sequence only; pages with fewer than 10 tags are skipped |
+| `title` | Page HTML | Case-folded, whitespace collapsed |
+| `kit_path` | Links, forms and the URL itself | `.php` scripts, or paths with words such as `verify`/`login` as whole tokens |
+| `tracking_id` | Page HTML | `UA-`, `G-`, `GTM-`, `AW-` and Facebook pixel IDs |
+| `ip`, `asn` | DNS A records; Team Cymru IP-to-ASN DNS | ASN looked up only for public IPv4 addresses |
+| `nameserver` | DNS NS records of the registered domain | |
+| `registrar`, `created_date` | RDAP via rdap.org | |
+| `cert` | crt.sh certificate transparency logs | Only certificates that also cover *another* registered domain; value is `issuer_ca_id:serial` |
+
+All test fixtures in `tests/fixtures/` are synthetic. See its README.
 
 ## Responsible use
 

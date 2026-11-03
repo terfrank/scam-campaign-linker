@@ -1,0 +1,27 @@
+{
+  "objectClassName": "domain",
+  "ldhName": "EXAMPLEBANK-SECURE-A.XYZ",
+  "status": ["client transfer prohibited"],
+  "events": [
+    {"eventAction": "registration", "eventDate": "2026-11-02T10:15:42Z"},
+    {"eventAction": "expiration", "eventDate": "2027-11-02T23:59:59Z"},
+    {"eventAction": "last update of RDAP database", "eventDate": "2026-11-03T08:00:00Z"}
+  ],
+  "entities": [
+    {
+      "objectClassName": "entity",
+      "roles": ["registrant"],
+      "vcardArray": ["vcard", [["version", {}, "text", "4.0"], ["fn", {}, "text", "REDACTED FOR PRIVACY"]]]
+    },
+    {
+      "objectClassName": "entity",
+      "roles": ["registrar"],
+      "publicIds": [{"type": "IANA Registrar ID", "identifier": "9999"}],
+      "vcardArray": ["vcard", [["version", {}, "text", "4.0"], ["fn", {}, "text", "Example  Registrar, Inc."]]]
+    }
+  ],
+  "nameservers": [
+    {"objectClassName": "nameserver", "ldhName": "NS1.EXAMPLE-HOST.XYZ"},
+    {"objectClassName": "nameserver", "ldhName": "NS2.EXAMPLE-HOST.XYZ"}
+  ]
+}

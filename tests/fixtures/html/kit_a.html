@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Examplebank - Secure Login</title>
+  <link rel="shortcut icon" href="/assets/fav.ico">
+  <link rel="stylesheet" href="/assets/style.css">
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-EXMPL12345"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('config', 'G-EXMPL12345');
+    fbq('init', '123456789012345');
+  </script>
+</head>
+<body>
+  <div class="header"><img src="/assets/logo.png" alt="Examplebank"></div>
+  <div class="box">
+    <h1>Sign in to online banking</h1>
+    <form action="/secure/verify.php" method="post">
+      <input type="text" name="user" placeholder="Customer ID">
+      <input type="password" name="pass" placeholder="Passcode">
+      <button type="submit">Continue</button>
+    </form>
+    <a href="/account/update">Forgotten your details?</a>
+  </div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

