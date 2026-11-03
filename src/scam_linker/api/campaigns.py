@@ -10,6 +10,7 @@ from scam_linker.api.deps import Context, DbSession, RateLimited
 from scam_linker.api.schemas import (
     CampaignOut,
     EvidenceOut,
+    LinkOut,
     MemberOut,
     RelatedOut,
     SeedCampaignOut,
@@ -64,16 +65,35 @@ def _possibly_related(
     for other, pair in pairs:
         if other not in best or pair.strength > best[other].strength:
             best[other] = pair
-    sites = repository.get_sites(session, best)
+    sites = repository.get_sites(
+        session, {site for pair in best.values() for site in (pair.site_a, pair.site_b)}
+    )
     ranked = sorted(best.items(), key=lambda item: (-item[1].strength, sites[item[0]].url))
     return [
         RelatedOut(
             url=sites[other].url,
+            related_to=sites[pair.site_a if other == pair.site_b else pair.site_b].url,
             strength=pair.strength,
             shared=[item.label for item in pair.evidence],
             explanation=describe_pair(pair, config),
         )
         for other, pair in ranked
+    ]
+
+
+def _links(
+    pairs: tuple[PairScore, ...], urls: dict[int, str], config: ScoringConfig
+) -> list[LinkOut]:
+    """The linked pairs inside a campaign: the edges of its graph."""
+    return [
+        LinkOut(
+            source=urls[pair.site_a],
+            target=urls[pair.site_b],
+            strength=pair.strength,
+            shared=[item.label for item in pair.evidence],
+            explanation=describe_pair(pair, config),
+        )
+        for pair in pairs
     ]
 
 
@@ -109,6 +129,7 @@ def from_seed(body: UrlRequest, session: DbSession, context: Context) -> SeedCam
             summary=_unknown_summary(seed, len(related)),
             evidence=[],
             members=[],
+            links=[],
             possibly_related_unknown=related,
         )
 
@@ -125,6 +146,7 @@ def from_seed(body: UrlRequest, session: DbSession, context: Context) -> SeedCam
         summary=row.explanation["summary"],
         evidence=_evidence(row.explanation),
         members=_members(row, urls, seed_id=seed.id),
+        links=_links(group.links, urls, context.scoring),
         possibly_related_unknown=_possibly_related(session, pairs, context.scoring),
     )
 

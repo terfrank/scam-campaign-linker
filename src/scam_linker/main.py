@@ -10,11 +10,12 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response, status
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from scam_linker import __version__
-from scam_linker.api import campaigns, sites
+from scam_linker.api import campaigns, pages, sites
 from scam_linker.api.deps import AppContext, Context
 from scam_linker.api.ratelimit import SlidingWindowLimiter
 from scam_linker.api.schemas import HealthResponse
@@ -64,6 +65,8 @@ def create_app(
     app.state.context = context
     app.include_router(sites.router)
     app.include_router(campaigns.router)
+    app.include_router(pages.router)
+    app.mount("/static", StaticFiles(packages=[("scam_linker", "static")]), name="static")
 
     @app.get("/health")
     def health(response: Response, ctx: Context) -> HealthResponse:

@@ -5,7 +5,7 @@ A defensive security tool. Give it one known scam or phishing URL (the "seed") a
 infrastructure into **campaigns**, explains *why* each site was linked, and gives a confidence
 score. When the evidence is weak or conflicting, it answers **UNKNOWN** instead of guessing.
 
-> **Status:** Phase 6 of 8: collectors, storage, linker and the HTTP API.
+> **Status:** Phase 7 of 8: collectors, storage, linker, HTTP API and campaign graph page.
 
 ## Quick start
 
@@ -101,6 +101,35 @@ Trade-offs, on purpose:
 - **Campaigns are snapshots.** Each `from-seed` call recomputes them, so campaign ids change
   between calls.
 - **The rate limiter is in memory**, which is correct for one API container but not for several.
+
+## Campaign graph page
+
+Open `/` (or `/?seed=<url>` to jump straight to a seed). The page draws the seed's campaign:
+
+- **Nodes:** the seed (orange), campaign members (blue) and possibly related sites (grey).
+- **Solid lines:** links, thicker for stronger links.
+- **Dashed lines:** weak or insufficient evidence, which never merges sites.
+- **Hover:** shows the plain-English evidence behind any line.
+
+Every URL, title and evidence value on the page comes from a scam site, so the page is
+built to treat them as hostile:
+
+- **No HTML from data:** values are inserted with `textContent` only. A test fails if
+  `innerHTML`-style APIs ever appear in `graph.js`, and hostile payloads were checked in a
+  real browser.
+- **Strict Content-Security-Policy:** `default-src 'none'; script-src 'self'`, with no inline
+  code, no third-party scripts (plain SVG, no CDN library) and no framing.
+- **URLs are defanged** (`hxxps://evil[.]xyz`) and never rendered as clickable links.
+
+### Offline demo (no real sites contacted)
+
+```bash
+export DATABASE_URL=sqlite:///demo.db
+alembic upgrade head
+python scripts/demo_data.py          # six fictional sites, signals written directly
+uvicorn --factory scam_linker.main:create_app
+# open http://127.0.0.1:8000/?seed=https://examplebank-secure-a.xyz/
+```
 
 ## Data model
 

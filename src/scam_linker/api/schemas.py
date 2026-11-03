@@ -64,10 +64,21 @@ class EvidenceOut(BaseModel):
     sites: int
 
 
+class LinkOut(BaseModel):
+    """A linked pair of campaign members: one edge of the campaign graph."""
+
+    source: str
+    target: str
+    strength: float
+    shared: list[str]
+    explanation: str
+
+
 class RelatedOut(BaseModel):
     """A site with some shared evidence, but not enough to link: UNKNOWN, not a member."""
 
     url: str
+    related_to: str  # the member (or seed) it shares evidence with
     strength: float
     shared: list[str]
     explanation: str
@@ -94,4 +105,5 @@ class SeedCampaignOut(BaseModel):
     summary: str
     evidence: list[EvidenceOut]
     members: list[MemberOut]
+    links: list[LinkOut]
     possibly_related_unknown: list[RelatedOut]

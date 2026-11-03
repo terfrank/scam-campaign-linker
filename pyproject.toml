@@ -53,7 +53,7 @@ known-first-party = ["scam_linker", "fakes"]  # fakes = tests/fakes.py, our shar
 
 [tool.mypy]
 python_version = "3.12"
-files = ["src", "tests", "migrations"]
+files = ["src", "tests", "migrations", "scripts"]
 plugins = ["pydantic.mypy"]
 disallow_untyped_defs = true
 check_untyped_defs = true

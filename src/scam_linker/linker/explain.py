@@ -5,7 +5,7 @@ from typing import Any
 
 from scam_linker.linker.config import EvidenceKind, ScoringConfig
 from scam_linker.linker.grouping import CampaignGroup
-from scam_linker.linker.scoring import Evidence, PairScore, SiteIndex, created_date
+from scam_linker.linker.scoring import TIER_ORDER, Evidence, PairScore, SiteIndex, created_date
 
 # Short noun for summaries, and a full sentence fragment for per-link explanations.
 NOUNS = {
@@ -71,10 +71,22 @@ def registration_range(campaign: CampaignGroup, index: SiteIndex) -> tuple[str, 
     return (dates[0].isoformat(), dates[-1].isoformat()) if dates else None
 
 
-def summarize(campaign: CampaignGroup, index: SiteIndex) -> str:
-    """e.g. '3 sites share favicon 495416780 and kit path /verify; registered 2026-11-02 to ...'"""
+def ranked_evidence(campaign: CampaignGroup, config: ScoringConfig) -> list[tuple[Evidence, int]]:
+    """Campaign evidence with how many members share it: strongest tier first, then most shared.
+
+    Tier comes first so weak evidence (a shared ASN) never headlines a campaign that is
+    actually held together by strong evidence.
+    """
     counts = Counter(item for member in campaign.members for item in member.shared)
-    top = sorted(counts, key=lambda item: (-counts[item], item))[:SUMMARY_ITEMS]
+    order = sorted(
+        counts, key=lambda item: (TIER_ORDER.index(config.tier(item.kind)), -counts[item], item)
+    )
+    return [(item, counts[item]) for item in order]
+
+
+def summarize(campaign: CampaignGroup, index: SiteIndex, config: ScoringConfig) -> str:
+    """e.g. '3 sites share favicon 495416780 and kit path /verify; registered 2026-11-02 to ...'"""
+    top = [item for item, _ in ranked_evidence(campaign, config)][:SUMMARY_ITEMS]
     parts = [f"{NOUNS[item.kind]} {display_value(item)}" for item in top]
     summary = f"{len(campaign.members)} sites share {_join(parts)}"
     dates = registration_range(campaign, index)
@@ -88,13 +100,12 @@ def campaign_explanation(
     campaign: CampaignGroup, index: SiteIndex, config: ScoringConfig
 ) -> dict[str, Any]:
     """The JSON stored in Campaign.explanation: summary plus every piece of evidence."""
-    counts = Counter(item for member in campaign.members for item in member.shared)
     dates = registration_range(campaign, index)
     return {
-        "summary": summarize(campaign, index),
+        "summary": summarize(campaign, index, config),
         "evidence": [
-            {"label": item.label, "description": describe(item, config), "sites": counts[item]}
-            for item in sorted(counts, key=lambda item: (-counts[item], item))
+            {"label": item.label, "description": describe(item, config), "sites": count}
+            for item, count in ranked_evidence(campaign, config)
         ],
         "registered_from": dates[0] if dates else None,
         "registered_to": dates[1] if dates else None,

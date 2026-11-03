@@ -164,6 +164,13 @@ def test_from_seed_returns_the_linked_campaign(
     assert related["url"] == BLOG
     assert sorted(related["shared"]) == ["asn:AS64500", "ip:45.67.89.10"]
     assert related["explanation"].startswith("Possibly related (UNKNOWN)")
+    assert related["related_to"] in (KIT_A, KIT_B)  # the member it shares the IP/ASN with
+
+    # The graph edges: one linked pair, explained.
+    [link] = body["links"]
+    assert {link["source"], link["target"]} == {KIT_A, KIT_B}
+    assert link["strength"] == 1.0
+    assert link["explanation"].startswith("Linked (strength 1.00): ")
 
     stored = client.get(f"/campaigns/{body['campaign_id']}").json()
     assert [m["url"] for m in stored["members"]] == [KIT_A, KIT_B]

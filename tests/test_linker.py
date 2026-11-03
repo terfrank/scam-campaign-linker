@@ -243,7 +243,7 @@ def test_campaign_summary_and_explanation() -> None:
     [campaign] = link_sites(index, CONFIG).campaigns
 
     # Most-shared first; ties (kit path, tracking ID: 2 sites each) in a fixed order.
-    assert summarize(campaign, index) == (
+    assert summarize(campaign, index, CONFIG) == (
         "3 sites share favicon 495416780, kit path /secure/verify.php and "
         "tracking ID G-EXMPL12345; registered 2026-11-02 to 2026-11-04"
     )
@@ -285,3 +285,19 @@ def test_two_copies_of_a_kit_are_linked_and_a_blog_is_not(
         EvidenceKind.RARE_KIT_PATH,
     }
     assert result.campaign_for(3) is None
+
+
+def test_weak_evidence_never_headlines_a_campaign() -> None:
+    """Sites 1-2 share a favicon and an ASN; 2-3 share a certificate and the same ASN.
+
+    The ASN is shared by the most members (all 3 count it via their links), but it is weak:
+    the summary must lead with the strong evidence that actually holds the campaign together.
+    """
+    index: SiteIndex = {1: {FAVICON, ASN}, 2: {FAVICON, CERT, ASN}, 3: {CERT, ASN}}
+    [campaign] = link_sites(index, CONFIG).campaigns
+
+    summary = summarize(campaign, index, CONFIG)
+
+    assert summary.startswith("3 sites share TLS certificate 295813:03bb")
+    assert "network AS64500" in summary  # still mentioned, but last
+    assert summary.index("network") > summary.index("favicon")
